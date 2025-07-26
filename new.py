@@ -262,7 +262,7 @@ def main():
     print("4. Replace 'YOUR_CLIENT_ID' and 'YOUR_CLIENT_SECRET' in the code")
     print("5. Run the script again")
     print()
-    
+     
     # Create and start the voice bot
     bot = SpotifyVoiceBot()
     
