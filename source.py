@@ -6,14 +6,14 @@ import sys
 import json
 import google.generativeai as genai
 import atexit
+import subprocess
+import webbrowser
 from vosk import Model, KaldiRecognizer
 
 # ────────────────────────────────────────
 # 🔐 Gemini API Setup
 genai.configure(api_key="AIzaSyBQX9f76wKPbBByq42AFu8iwGxB4QoVgwQ")
-llm_model = genai.GenerativeModel("gemini-1.5-flash")  # lightweight, fast model
-
-
+llm_model = genai.GenerativeModel("gemini-1.5-flash")
 
 print(genai.list_models())  # Shows all available model names
 
@@ -49,6 +49,38 @@ def callback(indata, frames, time, status):
     q.put(bytes(indata))
 
 # ────────────────────────────────────────
+# 💻 OS Command Execution Handler
+def try_os_command(text):
+    lowered = text.lower()
+
+    if "open spotify" in lowered:
+        try:
+            subprocess.Popen(["C:\\Users\\Mitul Gupta\\AppData\\Roaming\\Spotify\\Spotify.exe"])
+            return "Hai hai~ Opening Spotify for you Oniichan~ 🎵"
+        except Exception:
+            return "Gomen~ I couldn't open Spotify..."
+
+    elif "open browser" in lowered or "open google" in lowered:
+        webbrowser.open("https://www.google.com")
+        return "Opening your browser Oniichan~ 🌐"
+
+    elif "open youtube" in lowered:
+        webbrowser.open("https://youtube.com")
+        return "Here's YouTube Oniichan~ Enjoy your anime clips!"
+
+    elif "open camera" in lowered:
+        try:
+            subprocess.Popen("start microsoft.windows.camera:", shell=True)
+            return "Say cheese Oniichan~ Opening your camera 📸"
+        except Exception:
+            return "I tried, but your camera won't open, gomenasai..."
+
+    elif "shutdown" in lowered:
+        return "Ehh?! Oniichan don't make me shut down~ 😭"
+
+    return None
+
+# ────────────────────────────────────────
 # 🧠 Ask Gemini LLM
 def ask_llm(prompt):
     try:
@@ -73,13 +105,21 @@ with sd.RawInputStream(samplerate=sample_rate, blocksize=8000, dtype='int16',
 
                 if text:
                     print(f"\n🗣️ You said: {text}")
-                    response = ask_llm(f"You're a cute anime waifu. Respond lovingly to Oniichan who said: '{text}'")
-                    print(f"💬 Waifu: {response}")
-                    engine.say(response)
-                    engine.runAndWait()
+                    command_response = try_os_command(text)
+
+                    if command_response:
+                        print(f"💻 OS Waifu: {command_response}")
+                        engine.say(command_response)
+                        engine.runAndWait()
+                    else:
+                        response = ask_llm(f"You're a cute anime waifu. Respond lovingly to Oniichan who said: '{text}'")
+                        print(f"💬 Waifu: {response}")
+                        engine.say(response)
+                        engine.runAndWait()
             else:
                 partial = json.loads(recognizer.PartialResult())
                 print("Listening:", partial.get("partial", ""), end="\r")
 
     except KeyboardInterrupt:
         print("\n🛑 Oniichan, you stopped me~")
+    
