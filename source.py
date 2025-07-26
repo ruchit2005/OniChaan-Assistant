@@ -9,13 +9,13 @@ import atexit
 import subprocess
 import webbrowser
 from vosk import Model, KaldiRecognizer
+from spotipy.oauth2 import SpotifyOAuth
+import spotipy
 
 # ────────────────────────────────────────
 # 🔐 Gemini API Setup
 genai.configure(api_key="AIzaSyBQX9f76wKPbBByq42AFu8iwGxB4QoVgwQ")
 llm_model = genai.GenerativeModel("gemini-1.5-flash")
-
-print(genai.list_models())  # Shows all available model names
 
 # ────────────────────────────────────────
 # 🗣️ TTS Waifu Voice Setup
@@ -39,7 +39,7 @@ info = sd.query_devices(device_index, 'input')
 sample_rate = int(info['default_samplerate'])
 print("Mic sample rate:", sample_rate)
 
-model = Model('vosk-model-en-us-0.22-lgraph')  # 🔁 Path to your downloaded model
+model = Model('vosk-model-en-us-0.22-lgraph')
 recognizer = KaldiRecognizer(model, sample_rate)
 q = queue.Queue()
 
@@ -49,13 +49,62 @@ def callback(indata, frames, time, status):
     q.put(bytes(indata))
 
 # ────────────────────────────────────────
+# 🎵 Spotify Setup
+sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
+    client_id="a8ab1d4630bb40da869b3523bb189e3b",
+    client_secret="fe245ae172ad4b11ae11b24dda25f00fT",
+    redirect_uri="http://localhost:8888/callback",
+    scope="user-read-playback-state user-modify-playback-state user-read-currently-playing"
+))
+
+def control_spotify(text):
+    lowered = text.lower()
+
+    try:
+        if "pause spotify" in lowered or "pause music" in lowered:
+            sp.pause_playback()
+            return "Paused the music, Oniichan~ 🎶"
+
+        elif "play music" in lowered or "resume spotify" in lowered:
+            sp.start_playback()
+            return "Resuming your music, enjoy~ 🎷"
+
+        elif "next song" in lowered or "skip" in lowered:
+            sp.next_track()
+            return "Skipping ahead~ ⏭️"
+
+        elif "previous song" in lowered:
+            sp.previous_track()
+            return "Going back, just like our memories~ ⏮️"
+
+        elif "play" in lowered:
+            query = lowered.replace("play", "").strip()
+            result = sp.search(q=query, type="track", limit=1)
+            if result["tracks"]["items"]:
+                uri = result["tracks"]["items"][0]["uri"]
+                sp.start_playback(uris=[uri])
+                return f"Playing {query} just for you, Oniichan~ 💕"
+            else:
+                return "Hmm I can't find that song gomen~ 😿"
+
+    except Exception as e:
+        print(f"Spotify Error: {e}")
+        return "Spotify-chan is being tsundere... can't control her now."
+
+    return None
+
+# ────────────────────────────────────────
 # 💻 OS Command Execution Handler
 def try_os_command(text):
+    spotify_response = control_spotify(text)
+    if spotify_response:
+        return spotify_response
+
     lowered = text.lower()
 
     if "open spotify" in lowered:
         try:
-            subprocess.Popen(["C:\\Users\\Mitul Gupta\\AppData\\Roaming\\Spotify\\Spotify.exe"])
+            subprocess.Popen("start spotify", shell=True)
             return "Hai hai~ Opening Spotify for you Oniichan~ 🎵"
         except Exception:
             return "Gomen~ I couldn't open Spotify..."
@@ -75,9 +124,6 @@ def try_os_command(text):
         except Exception:
             return "I tried, but your camera won't open, gomenasai..."
 
-    elif "shutdown" in lowered:
-        return "Ehh?! Oniichan don't make me shut down~ 😭"
-
     return None
 
 # ────────────────────────────────────────
@@ -92,7 +138,7 @@ def ask_llm(prompt):
         return "Gomenasai Oniichan~ I can't respond right now..."
 
 # ────────────────────────────────────────
-# 🎬 Main Loop
+# 🎮 Main Loop
 with sd.RawInputStream(samplerate=sample_rate, blocksize=8000, dtype='int16',
                        channels=1, callback=callback, device=device_index):
     print("🎤 Waifu is listening... Speak now Oniichan~ (Ctrl+C to stop)")
@@ -122,4 +168,3 @@ with sd.RawInputStream(samplerate=sample_rate, blocksize=8000, dtype='int16',
 
     except KeyboardInterrupt:
         print("\n🛑 Oniichan, you stopped me~")
-    
