@@ -9,19 +9,16 @@ import requests
 import json
 import urllib.parse
 import base64
-import tkinter as tk
-from new_ui import AnimeWaifuApp  # Import the UI class
 
 class SpotifyVoiceBot:
-    def __init__(self, ui_app=None):
-        self.ui_app = ui_app  # Reference to the UI app
+    def __init__(self):
         self.recognizer = sr.Recognizer()
         self.microphone = sr.Microphone()
         self.listening = True
         
-        # Spotify API credentials
-        self.client_id = "4c4b888058944d2d898ed0e31d21def4"
-        self.client_secret = "3606e5ebe8e749e78d758af4c7437b2b"
+        # Spotify API credentials (you'll need to set these up)
+        self.client_id = "4c4b888058944d2d898ed0e31d21def4"  # Replace with your Spotify app client ID
+        self.client_secret = "3606e5ebe8e749e78d758af4c7437b2b"  # Replace with your Spotify app client secret
         self.access_token = None
         
         # Get access token on initialization
@@ -29,29 +26,32 @@ class SpotifyVoiceBot:
         
         # Adjust for ambient noise
         print("Adjusting for ambient noise... Please wait.")
-        if self.ui_app:
-            self.ui_app.update_status("Adjusting for ambient noise...")
-        
         with self.microphone as source:
             self.recognizer.adjust_for_ambient_noise(source)
-        
         print("Ready to listen!")
-        if self.ui_app:
-            self.ui_app.update_status("Ready to listen!")
 
     def get_access_token(self):
         """Get Spotify access token using Client Credentials flow"""
         try:
+            # Spotify token endpoint
             token_url = "https://accounts.spotify.com/api/token"
+            
+            # Create the authorization header
             client_credentials = f"{self.client_id}:{self.client_secret}"
             client_credentials_b64 = base64.b64encode(client_credentials.encode()).decode()
             
+            # Request headers
             headers = {
                 "Authorization": f"Basic {client_credentials_b64}",
                 "Content-Type": "application/x-www-form-urlencoded"
             }
             
-            data = {"grant_type": "client_credentials"}
+            # Request body
+            data = {
+                "grant_type": "client_credentials"
+            }
+            
+            # Make the request
             response = requests.post(token_url, headers=headers, data=data)
             
             if response.status_code == 200:
@@ -61,10 +61,12 @@ class SpotifyVoiceBot:
                 return True
             else:
                 print(f"Failed to get access token: {response.status_code}")
+                print("Falling back to web search method...")
                 return False
                 
         except Exception as e:
             print(f"Error getting access token: {e}")
+            print("Falling back to web search method...")
             return False
 
     def search_spotify_track(self, song_name):
@@ -73,10 +75,22 @@ class SpotifyVoiceBot:
             return None
             
         try:
+            # Spotify search endpoint
             search_url = "https://api.spotify.com/v1/search"
-            headers = {"Authorization": f"Bearer {self.access_token}"}
-            params = {"q": song_name, "type": "track", "limit": 1}
             
+            # Request headers
+            headers = {
+                "Authorization": f"Bearer {self.access_token}"
+            }
+            
+            # Request parameters
+            params = {
+                "q": song_name,
+                "type": "track",
+                "limit": 1
+            }
+            
+            # Make the search request
             response = requests.get(search_url, headers=headers, params=params)
             
             if response.status_code == 200:
@@ -89,7 +103,7 @@ class SpotifyVoiceBot:
                     track_name = track["name"]
                     artist_name = track["artists"][0]["name"]
                     print(f"Found: {track_name} by {artist_name}")
-                    return track_id, track_name, artist_name
+                    return track_id
                 else:
                     print(f"No tracks found for: {song_name}")
                     return None
@@ -107,40 +121,39 @@ class SpotifyVoiceBot:
             try:
                 with self.microphone as source:
                     print("Listening for 'Play [song name]'...")
-                    if self.ui_app:
-                        self.ui_app.update_status("Listening...")
-                    
+                    # Listen for audio with timeout
                     audio = self.recognizer.listen(source, timeout=1, phrase_time_limit=5)
                 
                 try:
+                    # Recognize speech using Google's speech recognition
                     command = self.recognizer.recognize_google(audio).lower()
                     print(f"You said: {command}")
                     
+                    # Check if command starts with "play"
                     if command.startswith("play "):
-                        song_name = command[5:]
+                        song_name = command[5:]  # Remove "play " from the beginning
                         print(f"Command recognized! Searching for: {song_name}")
-                        if self.ui_app:
-                            self.ui_app.update_status(f"Searching for: {song_name}")
                         self.play_song_on_spotify(song_name)
                     elif "play" in command and len(command.split()) >= 2:
+                        # Handle cases like "can you play perfect" or "please play perfect"
                         words = command.split()
                         try:
                             play_index = words.index("play")
                             if play_index + 1 < len(words):
                                 song_name = " ".join(words[play_index + 1:])
                                 print(f"Command recognized! Searching for: {song_name}")
-                                if self.ui_app:
-                                    self.ui_app.update_status(f"Searching for: {song_name}")
                                 self.play_song_on_spotify(song_name)
                         except ValueError:
                             pass
                     
                 except sr.UnknownValueError:
+                    # Speech was not clear enough
                     pass
                 except sr.RequestError as e:
                     print(f"Could not request results; {e}")
                     
             except sr.WaitTimeoutError:
+                # No speech detected within timeout
                 pass
             except KeyboardInterrupt:
                 print("\nStopping voice bot...")
@@ -150,26 +163,16 @@ class SpotifyVoiceBot:
     def play_song_on_spotify(self, song_name):
         """Search for the song and play it on Spotify"""
         try:
+            # Clean up the song name
             song_name = song_name.strip()
+            
+            # Search for the track ID dynamically
             print(f"Searching for '{song_name}' on Spotify...")
+            track_id = self.search_spotify_track(song_name)
             
-            result = self.search_spotify_track(song_name)
-            
-            if result:
-                track_id, track_name, artist_name = result
+            if track_id:
                 print(f"Found track ID: {track_id}")
-                
-                # Make the waifu speak first, then play the song after speaking is done
-                if self.ui_app:
-                    # Create a callback function to play the song after speaking
-                    def play_after_speaking():
-                        self.open_spotify_with_track(f"{track_name} by {artist_name}", track_id)
-                    
-                    # Waifu speaks first, then plays the song
-                    self.ui_app.speak_song_playing(f"{track_name} by {artist_name}", callback=play_after_speaking)
-                else:
-                    # If no UI, play directly
-                    self.open_spotify_with_track(f"{track_name} by {artist_name}", track_id)
+                self.open_spotify_with_track(song_name, track_id)
             else:
                 print("Track not found via API, falling back to web search...")
                 self.fallback_web_spotify(song_name, None)
@@ -181,11 +184,14 @@ class SpotifyVoiceBot:
     def open_spotify_with_track(self, song_name, track_id):
         """Open Spotify and play the specific track"""
         try:
+            # Method 1: Try to open Spotify desktop app directly
             if os.name == 'nt':  # Windows
                 try:
+                    # Try to start Spotify app
                     subprocess.Popen(['spotify'])
-                    time.sleep(4)
+                    time.sleep(4)  # Wait for Spotify to load
                     
+                    # Use direct track URI for automatic playback
                     track_uri = f"spotify:track:{track_id}"
                     subprocess.Popen(['start', track_uri], shell=True)
                     print(f"Now playing: {song_name}")
@@ -205,6 +211,7 @@ class SpotifyVoiceBot:
                         os.system(f'open "{track_uri}"')
                         print(f"Now playing: {song_name}")
                     else:
+                        # For Linux
                         subprocess.Popen(['spotify'])
                         time.sleep(4)
                         
@@ -226,11 +233,13 @@ class SpotifyVoiceBot:
             print("Opening Spotify Web Player...")
             
             if track_id:
+                # Direct link to the specific track
                 direct_url = f"https://open.spotify.com/track/{track_id}"
                 webbrowser.open(direct_url)
                 print(f"Opened direct link for: {song_name}")
                 print("The song should start playing automatically in the web player!")
             else:
+                # Search link as fallback
                 formatted_song = song_name.replace(' ', '%20')
                 search_web_url = f"https://open.spotify.com/search/{formatted_song}"
                 webbrowser.open(search_web_url)
@@ -244,57 +253,41 @@ class SpotifyVoiceBot:
         """Stop the voice bot"""
         self.listening = False
 
-def run_bot_with_ui():
-    """Run the bot with UI in a separate thread"""
-    def bot_thread():
-        # Create and start the voice bot with UI reference
-        bot = SpotifyVoiceBot(ui_app=app)
-        
-        if not bot.access_token:
-            print("WARNING: No Spotify API access. The bot will work but with limited functionality.")
-            if app:
-                app.update_status("WARNING: Limited Spotify API access")
-        
-        try:
-            # Start listening
-            bot.listen_for_commands()
-                
-        except KeyboardInterrupt:
-            print("\nShutting down voice bot...")
-            bot.stop_listening()
-
-    # Create the UI
-    root = tk.Tk()
-    app = AnimeWaifuApp(root)
-    
-    # Start the bot in a separate thread
-    bot_thread_obj = Thread(target=bot_thread)
-    bot_thread_obj.daemon = True
-    bot_thread_obj.start()
-    
-    # Handle window closing
-    def on_closing():
-        print("Shutting down...")
-        root.quit()
-        root.destroy()
-    
-    root.protocol("WM_DELETE_WINDOW", on_closing)
-    
-    # Start the UI main loop
-    root.mainloop()
-
 def main():
-    print("=== Waifu Spotify Voice Bot ===")
-    print("Starting with anime waifu UI...")
-    print()
-    print("Requirements:")
-    print("1. Make sure 'sparkle-erio.gif' is in the same folder")
-    print("2. Install required packages: pip install edge-tts pydub pillow")
-    print("3. Make sure you have a microphone connected")
-    print("4. Spotify should be installed (desktop app preferred)")
+    print("=== Spotify Voice Bot Setup ===")
+    print("IMPORTANT: You need to set up Spotify API credentials first!")
+    print("1. Go to https://developer.spotify.com/dashboard")
+    print("2. Create a new app")
+    print("3. Copy your Client ID and Client Secret")
+    print("4. Replace 'YOUR_CLIENT_ID' and 'YOUR_CLIENT_SECRET' in the code")
+    print("5. Run the script again")
     print()
      
-    run_bot_with_ui()
+    # Create and start the voice bot
+    bot = SpotifyVoiceBot()
+    
+    if not bot.access_token:
+        print("WARNING: No Spotify API access. The bot will work but with limited functionality.")
+        print("It will fall back to opening web search results.")
+        print()
+    
+    try:
+        # Start listening in a separate thread
+        listen_thread = Thread(target=bot.listen_for_commands)
+        listen_thread.daemon = True
+        listen_thread.start()
+        
+        print("Voice bot is running. Say 'Play [song name]' to search and play any song.")
+        print("Examples: 'Play Perfect', 'Play Bohemian Rhapsody', 'Play Shape of You'")
+        print("Press Ctrl+C to stop the bot.")
+        
+        # Keep the main thread alive
+        while bot.listening:
+            time.sleep(0.1)
+            
+    except KeyboardInterrupt:
+        print("\nShutting down voice bot...")
+        bot.stop_listening()
 
 if __name__ == "__main__":
     main()

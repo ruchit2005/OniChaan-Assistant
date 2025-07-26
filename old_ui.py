@@ -39,8 +39,7 @@ class AnimeWaifuApp:
         threading.Thread(target=self.run_speak).start()
 
     def run_speak(self):
-        asyncio.run(self.speak("""
-Good morning, my dear! I hope you slept well. I made sure to keep things quiet while you were resting... hehe~                               
+        asyncio.run(self.speak("""                             
 """))
 
     async def speak(self, text):
