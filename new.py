@@ -9,35 +9,44 @@ import requests
 import json
 import urllib.parse
 import base64
+import asyncio
+from gemini_handler import GeminiHandler
+
+from dotenv import load_dotenv
+load_dotenv()
+
+
 import tkinter as tk
 from new_ui import AnimeWaifuApp  # Import the UI class
 
 class SpotifyVoiceBot:
     def __init__(self, ui_app=None):
-        self.ui_app = ui_app  # Reference to the UI app
+        self.ui_app = ui_app
         self.recognizer = sr.Recognizer()
         self.microphone = sr.Microphone()
         self.listening = True
-        
-        # Spotify API credentials
-        self.client_id = "4c4b888058944d2d898ed0e31d21def4"
-        self.client_secret = "3606e5ebe8e749e78d758af4c7437b2b"
+
+        # Gemini setup
+        self.gemini = GeminiHandler(api_key=os.getenv("GEMINI_API_KEY"))
+
+        # Spotify credentials
+        self.client_id = os.getenv("SPOTIFY_CLIENT_ID")
+        self.client_secret = os.getenv("SPOTIFY_CLIENT_SECRET")
         self.access_token = None
-        
-        # Get access token on initialization
+
         self.get_access_token()
-        
-        # Adjust for ambient noise
+
         print("Adjusting for ambient noise... Please wait.")
         if self.ui_app:
             self.ui_app.update_status("Adjusting for ambient noise...")
-        
+
         with self.microphone as source:
             self.recognizer.adjust_for_ambient_noise(source)
-        
+
         print("Ready to listen!")
         if self.ui_app:
             self.ui_app.update_status("Ready to listen!")
+
 
     def get_access_token(self):
         """Get Spotify access token using Client Credentials flow"""
@@ -102,26 +111,26 @@ class SpotifyVoiceBot:
             return None
 
     def listen_for_commands(self):
-        """Continuously listen for voice commands"""
         while self.listening:
             try:
                 with self.microphone as source:
-                    print("Listening for 'Play [song name]'...")
+                    print("Listening for command...")
                     if self.ui_app:
                         self.ui_app.update_status("Listening...")
                     
                     audio = self.recognizer.listen(source, timeout=1, phrase_time_limit=5)
-                
+
                 try:
                     command = self.recognizer.recognize_google(audio).lower()
                     print(f"You said: {command}")
-                    
+
                     if command.startswith("play "):
                         song_name = command[5:]
                         print(f"Command recognized! Searching for: {song_name}")
                         if self.ui_app:
                             self.ui_app.update_status(f"Searching for: {song_name}")
                         self.play_song_on_spotify(song_name)
+
                     elif "play" in command and len(command.split()) >= 2:
                         words = command.split()
                         try:
@@ -134,18 +143,35 @@ class SpotifyVoiceBot:
                                 self.play_song_on_spotify(song_name)
                         except ValueError:
                             pass
-                    
+
+                    else:
+                        # Gemini fallback
+                        prompt = (
+                            f"You are Oniichan's helpful anime waifu assistant. "
+                            f"Respond in a cute and kind way to this message from Oniichan:\n"
+                            f"{command}"
+                        )
+                        response = self.gemini.chat(prompt)
+                        print(f"Gemini: {response}")
+                        if self.ui_app:
+                            self.ui_app.update_status(response)
+                            asyncio.run(self.ui_app.speak(response))
+
+
                 except sr.UnknownValueError:
                     pass
                 except sr.RequestError as e:
                     print(f"Could not request results; {e}")
-                    
+
             except sr.WaitTimeoutError:
                 pass
             except KeyboardInterrupt:
                 print("\nStopping voice bot...")
                 self.listening = False
                 break
+            except FileNotFoundError as e:
+                print(f"Speech error: missing command: {e.filename}")
+
 
     def play_song_on_spotify(self, song_name):
         """Search for the song and play it on Spotify"""
