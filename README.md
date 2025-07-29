@@ -49,7 +49,7 @@ cd onichaan-assistant
 ### 2. Install requirements
 
 ```bash
-pip install -r requirements.txt
+pip install -r req.txt
 ```
 
 ### 3. Set up your `.env`
